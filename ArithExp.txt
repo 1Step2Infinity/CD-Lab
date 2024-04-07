@@ -3,6 +3,7 @@
 #include <ctype.h> 
 #include <string.h>  
   
+#define MAX_SIZE 67 
 int stack[100];  
 int top = -1;  
 void push(int item) {  
