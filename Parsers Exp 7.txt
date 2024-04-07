@@ -1,0 +1,425 @@
+
+Experiment 7                                       24/3/24
+
+1. LR(0)
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define BUFFER_SIZE 100
+
+// Define states for the LR(0) automaton
+typedef enum {
+    STATE_0,
+    STATE_1,
+    STATE_2,
+    STATE_3,
+    ACCEPT_STATE,
+    ERROR_STATE
+} State;
+
+// Function to perform the parsing action based on the current state and input symbol
+State parse(State currentState, char symbol) {
+    switch (currentState) {
+        case STATE_0:
+            if (symbol == 'a') return STATE_1;
+            break;
+        case STATE_1:
+            if (symbol == 'a') return STATE_1;
+            if (symbol == 'b') return STATE_2;
+            break;
+        case STATE_2:
+            return ACCEPT_STATE;
+    }
+    return ERROR_STATE;
+}
+
+int main() {
+    char input[BUFFER_SIZE];
+    printf("Enter a string to parse (a/b only): ");
+    scanf("%99s", input);
+
+    int i = 0;
+    State currentState = STATE_0;
+
+    while (input[i] != '\0' && currentState != ACCEPT_STATE && currentState != ERROR_STATE) {
+        currentState = parse(currentState, input[i]);
+        i++;
+    }
+
+    if (currentState == ACCEPT_STATE) {
+        printf("The string \"%s\" is accepted by the grammar.\n", input);
+    } else {
+        printf("The string \"%s\" is not accepted by the grammar.\n", input);
+    }
+
+    return 0;
+}
+
+ 
+
+
+
+
+2.SLR(1)
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_STACK 100
+
+// Token types
+typedef enum { ID, PLUS, STAR, LPAREN, RPAREN, END, E, T, F } TokenType;
+
+// Structure for tokens
+typedef struct {
+    TokenType type;
+    char value[10];
+} Token;
+
+// Stack for parser
+typedef struct {
+    int state[MAX_STACK];
+    int top;
+} Stack;
+
+void push(Stack *stack, int state) {
+    if (stack->top < MAX_STACK - 1) {
+        stack->state[++stack->top] = state;
+    } else {
+        printf("Stack overflow\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int pop(Stack *stack) {
+    if (stack->top >= 0) {
+        return stack->state[stack->top--];
+    } else {
+        printf("Stack underflow\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int peek(const Stack *stack) {
+    return stack->top >= 0 ? stack->state[stack->top] : -1;
+}
+
+// Simple lexer: This should be replaced by a real lexer in a full implementation
+Token getNextToken(const char **input) {
+    while (**input == ' ') (*input)++; // Skip whitespaces
+
+    Token token;
+    switch (**input) {
+        case '\0':
+            token.type = END;
+            strcpy(token.value, "END");
+            break;
+        case '+':
+            token.type = PLUS;
+            strcpy(token.value, "+");
+            break;
+        case '*':
+            token.type = STAR;
+            strcpy(token.value, "*");
+            break;
+        case '(':
+            token.type = LPAREN;
+            strcpy(token.value, "(");
+            break;
+        case ')':
+            token.type = RPAREN;
+            strcpy(token.value, ")");
+            break;
+        default:
+            token.type = ID; // Simplification: any other character is considered an ID
+            strncpy(token.value, *input, 1);
+            token.value[1] = '\0';
+            break;
+    }
+
+    if (**input != '\0') (*input)++;
+    return token;
+}
+
+// Mockup function for SLR parsing table. This would normally consult a real parsing table.
+// Returns next state, or -1 for an error, or -2 for a reduction by a specific rule
+int SLRTable(int state, TokenType token) {
+    // Simplified decision logic for demonstration
+    if (state == 0 && token == ID) return 5; // Example shift action
+    if (state == 5 && token == PLUS) return 2; // Example goto action
+
+    // Example reductions and accept
+    if (state == 2 && token == END) return -2; // Reduction by rule
+
+    return -1; // Error state
+}
+
+int main() {
+    const char *input = "id + id"; // Example input
+    Token token = getNextToken(&input);
+    
+    Stack stack;
+    stack.top = -1;
+    push(&stack, 0); // Initial state
+
+    while (1) {
+        int state = peek(&stack);
+        int action = SLRTable(state, token.type);
+
+        if (action >= 0) {
+            // Shift
+            push(&stack, action);
+            token = getNextToken(&input);
+        } else if (action == -2) {
+            // Reduce
+            printf("Reduce by rule ...\n"); // Simplified, real implementation should perform the reduce action based on the rule
+            pop(&stack); // Pop states based on the RHS of the rule, simplified
+            // After reduction, push the state that corresponds to the goto part of the SLR table
+            push(&stack, 2); // This is a mock action for demonstration
+        } else if (state == 2 && token.type == END) {
+            // Accept
+            printf("The string is accepted.\n");
+            break;
+        } else {
+            printf("Syntax error.\n");
+            break;
+        }
+    }
+
+    return 0;
+}
+
+ 
+
+
+
+
+
+3.CLR(1)
+
+
+#include <stdio.h>
+#include <stdlib.h>
+
+// Token types
+typedef enum {
+    TK_a, // Terminal 'a'
+    TK_A, // Non-terminal A
+    TK_S, // Non-terminal S
+    TK_EOF, // End of input
+    TK_ERROR // Error or unknown token
+} TokenType;
+
+// Actions in the parsing table
+typedef enum {
+    SHIFT,
+    REDUCE,
+    ACCEPT,
+    GOTO,
+    ERROR
+} Action;
+
+// Hardcoded representation of states, for simplicity
+typedef struct {
+    Action action;
+    int nextState;
+} ParsingTableEntry;
+
+// Example parsing table, very simplified and specific to our grammar
+ParsingTableEntry parsingTable[5][5] = {
+    // States representation for our simple grammar
+    // Just an illustrative subset of what you might have
+    {{SHIFT, 1}, {ERROR, 0}, {ERROR, 0}, {ERROR, 0}, {ERROR, 0}}, // State 0, expecting 'a'
+    {{ERROR, 0}, {SHIFT, 2}, {ERROR, 0}, {ERROR, 0}, {ERROR, 0}}, // State 1, after seeing 'a'
+    {{ERROR, 0}, {ERROR, 0}, {SHIFT, 3}, {ACCEPT, 0}, {ERROR, 0}}, // State 2, expecting 'a' for A -> a
+};
+
+// Simulated stack for parsing
+typedef struct {
+    int states[100];
+    int top;
+} Stack;
+
+void stackPush(Stack *stack, int state) {
+    if (stack->top < (sizeof(stack->states) / sizeof(stack->states[0])) - 1) {
+        stack->states[++stack->top] = state;
+    } else {
+        printf("Stack overflow\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int stackPop(Stack *stack) {
+    if (stack->top >= 0) {
+        return stack->states[stack->top--];
+    } else {
+        printf("Stack underflow\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+int stackPeek(const Stack *stack) {
+    return stack->top >= 0 ? stack->states[stack->top] : -1;
+}
+
+TokenType getNextToken(const char **input) {
+    // Simple token fetch for our limited grammar
+    if (**input == 'a') {
+        (*input)++;
+        return TK_a;
+    } else if (**input == '\0') {
+        return TK_EOF;
+    } else {
+        return TK_ERROR;
+    }
+}
+
+int main() {
+    const char *input = "aa";
+    TokenType token = getNextToken(&input);
+    Stack stack;
+    stack.top = -1;
+    stackPush(&stack, 0); // Start state
+
+    while (1) {
+        int state = stackPeek(&stack);
+        ParsingTableEntry entry = parsingTable[state][token];
+
+        if (entry.action == SHIFT) {
+            printf("Shift %d\n", entry.nextState);
+            stackPush(&stack, entry.nextState);
+            token = getNextToken(&input);
+        } else if (entry.action == REDUCE) {
+            printf("Reduce by rule\n");
+            // Normally, you'd pop off as many states as there are symbols in the rule's RHS
+            // and push a state based on a goto action, but our example is too simplified for that
+        } else if (entry.action == ACCEPT) {
+            printf("Input accepted\n");
+            break;
+        } else {
+            printf("Syntax error\n");
+            break;
+        }
+    }
+
+    return 0;
+}
+ 
+
+
+
+
+
+4.LALR(1)
+
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+typedef enum { S, E, T, PLUS, ID, END, $ } Symbol;
+
+typedef struct {
+    Symbol symbol;
+    int state;
+} StackItem;
+
+typedef struct {
+    char action; // 'S' for shift, 'R' for reduce, 'A' for accept, 'E' for error
+    int number; // State number or production number
+} ActionTableEntry;
+
+typedef struct {
+    int nextState;
+} GotoTableEntry;
+
+#define STACK_SIZE 256
+StackItem stack[STACK_SIZE];
+int stackTop = -1;
+
+// Example LALR(1) action table for the given grammar (highly simplified)
+ActionTableEntry actionTable[3][3] = {
+    // ID, PLUS, END
+    {{'S', 2}, {'E', 0}, {'E', 0}}, // state 0
+    {{'E', 0}, {'S', 1}, {'A', 0}}, // state 1, accepting state
+    {{'E', 0}, {'R', 1}, {'R', 1}}  // state 2, reduce state
+};
+
+// Example LALR(1) goto table for the given grammar (highly simplified)
+GotoTableEntry gotoTable[3][1] = {
+    // E
+    {1}, // state 0
+    {0}, // state 1 (dummy, won't be used)
+    {0}  // state 2 (dummy, won't be used)
+};
+
+void push(Symbol symbol, int state) {
+    if (stackTop < STACK_SIZE - 1) {
+        stack[++stackTop].symbol = symbol;
+        stack[stackTop].state = state;
+    } else {
+        printf("Stack overflow.\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+StackItem pop() {
+    if (stackTop >= 0) {
+        return stack[stackTop--];
+    } else {
+        printf("Stack underflow.\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+Symbol getNextSymbol(const char **input) {
+    while (**input == ' ') (*input)++;
+    if (**input == '+') {
+        (*input)++;
+        return PLUS;
+    } else if (**input == '\0') {
+        return END;
+    } else {
+        (*input)++;
+        return ID;
+    }
+}
+
+int main() {
+    const char *input = "id + id";
+    Symbol symbol = getNextSymbol(&input);
+
+    push($, 0); // Initial stack setup
+
+    while (1) {
+        int currentState = stack[stackTop].state;
+        ActionTableEntry action = actionTable[currentState][symbol];
+
+        if (action.action == 'S') { // Shift
+            push(symbol, action.number);
+            symbol = getNextSymbol(&input);
+        } else if (action.action == 'R') { // Reduce
+            // Example reduction by one of the productions (highly simplified)
+            printf("Reducing...\n");
+            pop(); // Pop once for the body of the production
+            int gotoState = gotoTable[stack[stackTop].state][E].nextState;
+            push(E, gotoState);
+        } else if (action.action == 'A') {
+            printf("Input accepted.\n");
+            break;
+        } else {
+            printf("Syntax error.\n");
+            break;
+        }
+    }
+
+    return 0;
+}
+
+
+
